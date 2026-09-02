@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>Mobile Web Book Reader</title>
+  <meta name="description"
+    content="A mobile-optimized interactive 3D web book reader with authentic 3D corner flip forward and smooth slide backward animations." />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#090b10" />
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Cinzel:wght@600;700&display=swap"
+    rel="stylesheet" />
+
+  <!-- CSS Stylesheet -->
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body class="theme-obsidian">
+  <!-- Ambient Background Glow & Gradients -->
+  <div class="ambient-glow" aria-hidden="true">
+    <div class="glow-orb orb-1"></div>
+    <div class="glow-orb orb-2"></div>
+    <div class="glow-grain"></div>
+  </div>
+
+  <!-- Main Mobile App Shell -->
+  <div id="app-container" class="app-container">
+
+    <!-- Mobile Top Header Bar -->
+    <header class="mobile-top-bar glass-dock" id="topNav">
+      <div class="header-left">
+        <div class="app-logo">
+          <svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+          </svg>
+          <div class="title-wrap">
+            <h1 class="book-title">Web Book</h1>
+            <span class="book-meta">56 Pages</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="header-center">
+        <!-- Floating Page Pill Badge -->
+        <button class="mobile-page-pill glass-chip" id="pageBadge" title="Tap to jump to page">
+          <span class="pill-label">Page</span>
+          <span class="current-page-num" id="currentPageText">1</span>
+          <span class="pill-divider">/</span>
+          <span class="total-pages-num" id="totalPagesText">56</span>
+        </button>
+      </div>
+
+      <div class="header-right">
+        <!-- Sound Toggle -->
+        <button class="m-icon-btn" id="soundToggleBtn" aria-label="Toggle Sound" title="Sound FX">
+          <svg class="icon sound-on-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+            <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+          </svg>
+          <svg class="icon sound-off-icon hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2">
+            <line x1="1" y1="1" x2="23" y2="23"></line>
+            <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4l-5 4H4v6h4"></path>
+            <path d="M17 17a9 9 0 0 0 2-6"></path>
+          </svg>
+        </button>
+
+        <!-- Theme Picker -->
+        <div class="theme-dropdown-wrapper">
+          <button class="m-icon-btn" id="themeBtn" aria-label="Change Theme" title="Theme Color">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="5"></circle>
+              <line x1="12" y1="1" x2="12" y2="3"></line>
+              <line x1="12" y1="21" x2="12" y2="23"></line>
+              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+              <line x1="1" y1="12" x2="3" y2="12"></line>
+              <line x1="21" y1="12" x2="23" y2="12"></line>
+              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+            </svg>
+          </button>
+          <div class="theme-menu-sheet glass-card" id="themeMenu">
+            <div class="menu-heading">Color Themes</div>
+            <button class="theme-item active" data-theme="theme-obsidian">
+              <span class="color-bullet bullet-obsidian"></span>
+              <span>Obsidian Dark</span>
+            </button>
+            <button class="theme-item" data-theme="theme-midnight">
+              <span class="color-bullet bullet-midnight"></span>
+              <span>Midnight Blue</span>
+            </button>
+            <button class="theme-item" data-theme="theme-parchment">
+              <span class="color-bullet bullet-parchment"></span>
+              <span>Warm Gold</span>
+            </button>
+            <button class="theme-item" data-theme="theme-emerald">
+              <span class="color-bullet bullet-emerald"></span>
+              <span>Emerald Night</span>
+            </button>
+            <button class="theme-item" data-theme="theme-lumina">
+              <span class="color-bullet bullet-lumina"></span>
+              <span>Clean Daylight</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Fullscreen / Immersive Toggle -->
+        <button class="m-icon-btn" id="fullscreenBtn" aria-label="Fullscreen Mode" title="Fullscreen">
+          <svg class="icon maximize-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3">
+            </path>
+          </svg>
+          <svg class="icon minimize-icon hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4 14h6v6m10-10h-6V4m0 16v-6h6M4 10h6V4"></path>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Reader Arena -->
+    <main class="mobile-reader-arena" id="readerStage">
+
+      <!-- Book Viewport Container -->
+      <div class="book-viewport-container" id="bookViewportWrapper">
+        <div class="book-shadow-surface"></div>
+        <div class="book-3d-stage" id="bookContainer">
+          <div id="flipbook" class="flipbook">
+            <!-- 56 pages rendered by JavaScript for StPageFlip -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Autoplay Floating Status Badge -->
+      <div class="autoplay-chip glass-chip hidden" id="autoplayIndicator">
+        <span class="pulse-indicator"></span>
+        <span>Auto-flip in <b id="autoplayCountdown">5s</b></span>
+        <button class="close-autoplay-btn" id="stopAutoplayBtn">✕</button>
+      </div>
+
+    </main>
+
+    <!-- Mobile Bottom Control Dock -->
+    <footer class="mobile-bottom-dock glass-dock" id="bottomNav">
+
+      <!-- Primary Flip & Scrub Bar -->
+      <div class="dock-primary-row">
+        <!-- Prev Button -->
+        <button class="dock-flip-btn" id="prevPageBtn" aria-label="Previous Page">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="15 18 9 12 15 6"></polyline>
+          </svg>
+        </button>
+
+        <!-- Scrub Slider with Bubble -->
+        <div class="dock-slider-wrap">
+          <div class="mobile-slider-bubble" id="sliderPreviewBubble">
+            <img class="bubble-thumb" id="sliderPreviewThumb" src="Pages/Page (1).jpeg" alt="Page thumb" />
+            <span class="bubble-num" id="sliderPreviewText">Page 1</span>
+          </div>
+          <input type="range" class="mobile-slider" id="pageSlider" min="1" max="56" value="1" step="1"
+            aria-label="Page Scrubber" />
+          <div class="slider-fill" id="sliderProgressBar"></div>
+        </div>
+
+        <!-- Next Button -->
+        <button class="dock-flip-btn" id="nextPageBtn" aria-label="Next Page">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="9 18 15 12 9 6"></polyline>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Quick Action Navigation Tabs -->
+      <div class="dock-actions-row">
+        <!-- Gallery / Thumbnails -->
+        <button class="action-tab-btn" id="thumbnailsToggleBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="7" height="7" rx="1.5"></rect>
+            <rect x="14" y="3" width="7" height="7" rx="1.5"></rect>
+            <rect x="14" y="14" width="7" height="7" rx="1.5"></rect>
+            <rect x="3" y="14" width="7" height="7" rx="1.5"></rect>
+          </svg>
+          <span>Gallery</span>
+        </button>
+
+        <!-- Bookmark Current -->
+        <button class="action-tab-btn" id="bookmarkCurrentBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
+          </svg>
+          <span>Bookmark</span>
+        </button>
+
+        <!-- Bookmarks Drawer -->
+        <button class="action-tab-btn" id="bookmarksDrawerBtn">
+          <div class="tab-icon-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+            </svg>
+            <span class="tab-badge" id="bookmarkCountBadge">0</span>
+          </div>
+          <span>Saved</span>
+        </button>
+
+        <!-- Zoom / Magnifier -->
+        <button class="action-tab-btn" id="zoomToggleBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            <line x1="11" y1="8" x2="11" y2="14"></line>
+            <line x1="8" y1="11" x2="14" y2="11"></line>
+          </svg>
+          <span>Zoom</span>
+        </button>
+
+        <!-- Auto-Play Slideshow -->
+        <button class="action-tab-btn" id="autoPlayBtn">
+          <svg class="play-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="5 3 19 12 5 21 5 3"></polygon>
+          </svg>
+          <svg class="pause-icon hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="6" y="4" width="4" height="16"></rect>
+            <rect x="14" y="4" width="4" height="16"></rect>
+          </svg>
+          <span>Auto</span>
+        </button>
+      </div>
+
+    </footer>
+
+    <!-- Bottom Sheet: Thumbnails Gallery Drawer -->
+    <div class="mobile-bottom-sheet" id="thumbnailsDrawer" aria-hidden="true">
+      <div class="sheet-drag-handle-bar">
+        <div class="sheet-drag-handle"></div>
+      </div>
+      <div class="sheet-header">
+        <div class="sheet-title-box">
+          <h2>Page Gallery</h2>
+          <span class="sheet-subtitle">56 Pages • Tap to flip</span>
+        </div>
+        <div class="sheet-actions">
+          <div class="m-jump-box">
+            <input type="number" id="jumpPageInput" min="1" max="56" placeholder="Page #" />
+            <button id="jumpPageBtn">Go</button>
+          </div>
+          <button class="sheet-close-btn" id="closeThumbnailsBtn" aria-label="Close">✕</button>
+        </div>
+      </div>
+      <div class="sheet-content">
+        <div class="m-thumbnails-grid" id="thumbnailsGrid">
+          <!-- 56 Thumbnail Cards -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Bookmarks Modal Sheet -->
+    <div class="modal-overlay" id="bookmarksModal" aria-hidden="true">
+      <div class="modal-sheet glass-card">
+        <div class="sheet-header">
+          <div class="sheet-title-box">
+            <h2>Bookmarked Pages</h2>
+            <span class="sheet-subtitle">Quick access to marked pages</span>
+          </div>
+          <button class="sheet-close-btn" id="closeBookmarksBtn">✕</button>
+        </div>
+        <div class="sheet-content">
+          <div class="m-bookmarks-grid" id="bookmarksList">
+            <!-- Bookmarks items -->
+          </div>
+          <div class="empty-state" id="emptyBookmarksMsg">
+            <p>No pages bookmarked yet.</p>
+            <span>Tap the "Bookmark" icon at the bottom dock to pin any page.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Zoom Inspection Modal -->
+    <div class="mobile-zoom-modal" id="zoomViewerModal" aria-hidden="true">
+      <div class="zoom-header glass-dock">
+        <div class="zoom-title" id="zoomPageTitle">Page 1 • Zoom View</div>
+        <div class="zoom-actions">
+          <button class="m-icon-btn" id="zoomOutBtn" title="Zoom Out">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+          </button>
+          <span class="zoom-scale-text" id="zoomLevelText">150%</span>
+          <button class="m-icon-btn" id="zoomInBtn" title="Zoom In">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+          </button>
+          <button class="zoom-reset-btn" id="zoomResetBtn">Reset</button>
+          <button class="sheet-close-btn" id="closeZoomBtn">✕</button>
+        </div>
+      </div>
+      <div class="zoom-viewport" id="zoomCanvasArea">
+        <div class="zoom-img-container" id="zoomImageWrapper">
+          <img id="zoomImage" src="Pages/Page (1).jpeg" alt="Zoomed detail" draggable="false" />
+        </div>
+      </div>
+      <div class="zoom-bottom-tip">
+        <span>👆 Drag with one finger to pan • Pinch or use +/- to zoom</span>
+      </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div class="mobile-toast" id="toastNotification">
+      <span id="toastMessage">Page Bookmarked</span>
+    </div>
+
+  </div>
+
+  <!-- Audio Element -->
+  <audio id="pageFlipAudio" preload="auto" src="page-flip-03.mp3"></audio>
+
+  <!-- PageFlip Script Library & Application Logic -->
+  <script src="page-flip.browser.js"></script>
+  <script src="app.js"></script>
+</body>
+
+</html>

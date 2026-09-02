@@ -26,7 +26,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const currentPageText = document.getElementById('currentPageText');
   const totalPagesText = document.getElementById('totalPagesText');
   const pageSlider = document.getElementById('pageSlider');
-  const sliderProgressBar = document.getElementById('sliderProgressBar');
   const sliderPreviewBubble = document.getElementById('sliderPreviewBubble');
   const sliderPreviewThumb = document.getElementById('sliderPreviewThumb');
   const sliderPreviewText = document.getElementById('sliderPreviewText');
@@ -171,7 +170,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const img = document.createElement('img');
       img.src = src;
       img.alt = `Book Page ${idx + 1}`;
-      img.loading = idx < 6 ? 'eager' : 'lazy';
+      img.loading = idx < 2 ? 'eager' : 'lazy';
       img.decoding = 'async';
 
       pageDiv.appendChild(img);
@@ -180,10 +179,12 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Preload adjacent page textures for zero stutter
+  const preloadedCache = new Set();
   function preloadAdjacentPages(currentIndex) {
-    const indicesToPreload = [currentIndex - 1, currentIndex + 1, currentIndex + 2];
+    const indicesToPreload = [currentIndex - 1, currentIndex + 1];
     indicesToPreload.forEach(idx => {
-      if (idx >= 0 && idx < PAGE_IMAGES.length) {
+      if (idx >= 0 && idx < PAGE_IMAGES.length && !preloadedCache.has(idx)) {
+        preloadedCache.add(idx);
         const preImg = new Image();
         preImg.decoding = 'async';
         preImg.src = PAGE_IMAGES[idx];
@@ -266,13 +267,13 @@ document.addEventListener('DOMContentLoaded', () => {
       maxWidth: 2400,
       minHeight: 220,
       maxHeight: 2400,
-      maxShadowOpacity: 0.28,
+      maxShadowOpacity: 0.12,
       showCover: false,
       usePortrait: true,
       mobileScrollSupport: false,
-      flippingTime: 420, // Snappy & smooth
+      flippingTime: 320, // Snappy & ultra-smooth 60/120fps
       useMouseEvents: true,
-      swipeDistance: 20,
+      swipeDistance: 25,
       drawShadow: true
     });
 
@@ -301,14 +302,21 @@ document.addEventListener('DOMContentLoaded', () => {
     updateBookmarkBadge();
   }
 
-  // Update UI Elements
+  // Cached thumb cards reference for O(1) active state updates
+  let currentActiveThumbCard = null;
+
+  // Helper to update slider track background gradient
+  function updateSliderFill(val) {
+    const percent = ((val - 1) / (TOTAL_PAGES - 1)) * 100;
+    pageSlider.value = val;
+    pageSlider.style.background = `linear-gradient(to right, var(--accent) 0%, var(--accent) ${percent}%, rgba(255, 255, 255, 0.18) ${percent}%, rgba(255, 255, 255, 0.18) 100%)`;
+  }
+
+  // Update UI Elements - Zero layout thrashing
   function updateNavigationUI(pageIndex) {
     const pageNum = pageIndex + 1;
     currentPageText.textContent = pageNum;
-    pageSlider.value = pageNum;
-
-    const percentage = ((pageNum - 1) / (TOTAL_PAGES - 1)) * 100;
-    sliderProgressBar.style.width = `${percentage}%`;
+    updateSliderFill(pageNum);
 
     const isFirst = pageIndex === 0;
     const isLast = pageIndex >= TOTAL_PAGES - 1;
@@ -316,17 +324,19 @@ document.addEventListener('DOMContentLoaded', () => {
     prevPageBtn.classList.toggle('disabled', isFirst);
     nextPageBtn.classList.toggle('disabled', isLast);
 
-    // Active Gallery Card
-    document.querySelectorAll('.m-thumb-card').forEach((card, idx) => {
-      if (idx === pageIndex) {
-        card.classList.add('active');
-        if (thumbnailsDrawer.classList.contains('open')) {
-          card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        }
-      } else {
-        card.classList.remove('active');
+    // Fast Active Gallery Card update without full DOM search
+    if (thumbnailsGrid && thumbnailsGrid.children.length > pageIndex) {
+      if (currentActiveThumbCard) {
+        currentActiveThumbCard.classList.remove('active');
       }
-    });
+      currentActiveThumbCard = thumbnailsGrid.children[pageIndex];
+      if (currentActiveThumbCard) {
+        currentActiveThumbCard.classList.add('active');
+        if (thumbnailsDrawer.classList.contains('open')) {
+          currentActiveThumbCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+      }
+    }
 
     updateBookmarkButtonState(pageNum);
   }
@@ -347,12 +357,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Touch & Swipe & 2-Finger Pinch-to-Zoom Navigation
+  // Touch & Tap Navigation on Reader Stage
   let touchStartX = 0;
   let touchStartY = 0;
   let touchStartTime = 0;
-  let isSwiping = false;
-
   let stagePinchStartDist = 0;
   let stagePinchCenterX = 0;
   let stagePinchCenterY = 0;
@@ -363,11 +371,9 @@ document.addEventListener('DOMContentLoaded', () => {
       touchStartX = e.touches[0].clientX;
       touchStartY = e.touches[0].clientY;
       touchStartTime = Date.now();
-      isSwiping = true;
       stagePinchActive = false;
     } else if (e.touches.length === 2) {
-      // 2 fingers detected on page -> prepare pinch-to-zoom
-      isSwiping = false;
+      // 2 fingers detected on reader page -> open magnifier zoom
       const t1 = e.touches[0];
       const t2 = e.touches[1];
       stagePinchStartDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
@@ -375,33 +381,28 @@ document.addEventListener('DOMContentLoaded', () => {
       stagePinchCenterY = (t1.clientY + t2.clientY) / 2;
       stagePinchActive = true;
     }
-  }, { passive: false });
+  }, { passive: true });
 
   readerStage.addEventListener('touchmove', (e) => {
     if (e.touches.length === 2 && stagePinchActive) {
-      if (e.cancelable) e.preventDefault(); // Prevent browser whole-page zoom
       const t1 = e.touches[0];
       const t2 = e.touches[1];
       const curDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
       const curMidX = (t1.clientX + t2.clientX) / 2;
       const curMidY = (t1.clientY + t2.clientY) / 2;
 
-      // Pinch out or in gesture triggered on reader page
-      if (Math.abs(curDist - stagePinchStartDist) > 12) {
+      if (Math.abs(curDist - stagePinchStartDist) > 16) {
         stagePinchActive = false;
         const initialZoomRatio = curDist / (stagePinchStartDist || 1);
         openZoomModalWithPinch(curMidX, curMidY, initialZoomRatio);
       }
     }
-  }, { passive: false });
+  }, { passive: true });
 
   readerStage.addEventListener('touchend', (e) => {
     if (stagePinchActive && e.touches.length < 2) {
       stagePinchActive = false;
     }
-
-    if (!isSwiping) return;
-    isSwiping = false;
 
     if (e.changedTouches.length === 0) return;
     const touchEndX = e.changedTouches[0].clientX;
@@ -413,22 +414,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const absX = Math.abs(diffX);
     const absY = Math.abs(diffY);
 
-    if (absX > 25 && absX > absY) {
-      if (diffX < 0) {
-        turnNext();
-      } else {
-        turnPrev();
-      }
-      return;
-    }
-
-    if (duration < 300 && absX < 12 && absY < 12) {
+    // Discrete quick tap detection for left/right page turn
+    if (duration < 220 && absX < 8 && absY < 8) {
       const screenWidth = window.innerWidth;
       const tapX = touchEndX;
 
-      if (tapX < screenWidth * 0.28) {
+      if (tapX < screenWidth * 0.24) {
         turnPrev();
-      } else if (tapX > screenWidth * 0.72) {
+      } else if (tapX > screenWidth * 0.76) {
         turnNext();
       } else {
         document.body.classList.toggle('immersive-mode');
@@ -436,21 +429,29 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }, { passive: true });
 
-  // Bottom Buttons
+  // Bottom Flip Buttons
   prevPageBtn.addEventListener('click', turnPrev);
   nextPageBtn.addEventListener('click', turnNext);
 
-  // Slider Scrubber Events
+  // High-Performance Scrubber Slider (Batched via rAF)
+  let sliderRafPending = false;
+
   pageSlider.addEventListener('input', (e) => {
     const val = parseInt(e.target.value, 10);
     sliderPreviewText.textContent = `Page ${val}`;
     sliderPreviewThumb.src = PAGE_IMAGES[val - 1];
 
-    const rect = pageSlider.getBoundingClientRect();
-    const percent = (val - 1) / (TOTAL_PAGES - 1);
-    const bubbleX = percent * rect.width;
-    sliderPreviewBubble.style.left = `${bubbleX}px`;
-    sliderPreviewBubble.classList.add('show');
+    if (!sliderRafPending) {
+      sliderRafPending = true;
+      requestAnimationFrame(() => {
+        const percent = (val - 1) / (TOTAL_PAGES - 1);
+        const trackW = pageSlider.clientWidth || 200;
+        sliderPreviewBubble.style.left = `${percent * trackW}px`;
+        updateSliderFill(val);
+        sliderPreviewBubble.classList.add('show');
+        sliderRafPending = false;
+      });
+    }
   });
 
   pageSlider.addEventListener('change', (e) => {
@@ -460,7 +461,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   pageSlider.addEventListener('touchend', () => {
-    setTimeout(() => sliderPreviewBubble.classList.remove('show'), 300);
+    setTimeout(() => sliderPreviewBubble.classList.remove('show'), 200);
   });
 
   // Sound Toggle
@@ -667,25 +668,29 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 240);
   }
 
-  // Dismiss listeners
+  // Explicit Close Button listeners ONLY (Modal never auto-closes on release or backdrop tap)
   if (closeBookmarkPeekBtn) {
-    closeBookmarkPeekBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
+    const handleClose = (e) => {
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
       closeBookmarkPeek();
-    });
+    };
+    closeBookmarkPeekBtn.addEventListener('click', handleClose);
+    closeBookmarkPeekBtn.addEventListener('touchend', handleClose);
   }
 
   if (peekCloseBottomBtn) {
-    peekCloseBottomBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
+    const handleBottomClose = (e) => {
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
       closeBookmarkPeek();
-    });
-  }
-
-  if (bookmarkPeekBackdrop) {
-    bookmarkPeekBackdrop.addEventListener('click', () => {
-      closeBookmarkPeek();
-    });
+    };
+    peekCloseBottomBtn.addEventListener('click', handleBottomClose);
+    peekCloseBottomBtn.addEventListener('touchend', handleBottomClose);
   }
 
   if (peekJumpBtn) {
@@ -911,6 +916,56 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // Grid-Level 2-Finger Pinch Detection (Gallery & Bookmarks Grids)
+  function setupGridPinchZoom(gridElement) {
+    if (!gridElement) return;
+    let gridPinchStartDist = 0;
+    let gridPinchScale = 1.8;
+    let isGridPinching = false;
+
+    gridElement.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 2) {
+        const t1 = e.touches[0];
+        const t2 = e.touches[1];
+        const midX = (t1.clientX + t2.clientX) / 2;
+        const midY = (t1.clientY + t2.clientY) / 2;
+        gridPinchStartDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+
+        // Identify the card under user's fingers
+        const element = document.elementFromPoint(midX, midY);
+        const card = element ? element.closest('[data-page]') : null;
+        if (card) {
+          const pageNum = parseInt(card.getAttribute('data-page'), 10);
+          if (pageNum >= 1 && pageNum <= TOTAL_PAGES) {
+            isGridPinching = true;
+            openBookmarkPeek(pageNum, 1.8, 0, 0);
+            if (navigator.vibrate) {
+              try { navigator.vibrate(15); } catch (err) {}
+            }
+          }
+        }
+      }
+    }, { passive: true });
+
+    gridElement.addEventListener('touchmove', (e) => {
+      if (e.touches.length === 2 && isGridPinching && isPeekActive) {
+        const t1 = e.touches[0];
+        const t2 = e.touches[1];
+        const curDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+        const ratio = curDist / (gridPinchStartDist || curDist);
+        const targetScale = Math.min(5.0, Math.max(1.1, gridPinchScale * ratio));
+        updateBookmarkPeek(targetScale, 0, 0);
+      }
+    }, { passive: true });
+
+    gridElement.addEventListener('touchend', (e) => {
+      if (e.touches.length < 2) {
+        isGridPinching = false;
+        gridPinchStartDist = 0;
+      }
+    }, { passive: true });
+  }
+
   // Build Thumbnail Grid (Gallery)
   function buildThumbnailsGrid() {
     thumbnailsGrid.innerHTML = '';
@@ -924,22 +979,31 @@ document.addEventListener('DOMContentLoaded', () => {
       img.src = src;
       img.alt = `Page ${pageNum}`;
       img.loading = 'lazy';
+      img.decoding = 'async';
 
       const numBadge = document.createElement('span');
       numBadge.className = 'm-thumb-num';
       numBadge.textContent = `${pageNum}`;
 
+      const zoomCue = document.createElement('span');
+      zoomCue.className = 'm-thumb-zoom-cue';
+      zoomCue.textContent = `🔍`;
+      zoomCue.title = '2-finger pinch to zoom';
+
       card.appendChild(img);
       card.appendChild(numBadge);
+      card.appendChild(zoomCue);
 
       // Attach 2-Finger Pinch Zoom & Hold-to-Peek to Gallery Card
-      attachCardPeekGestures(card, img, pageNum, null, () => {
+      attachCardPeekGestures(card, card, pageNum, null, () => {
         turnToPage(pageNum);
         thumbnailsDrawer.classList.remove('open');
       });
 
       thumbnailsGrid.appendChild(card);
     });
+
+    setupGridPinchZoom(thumbnailsGrid);
   }
 
   thumbnailsToggleBtn.addEventListener('click', () => {
@@ -1010,6 +1074,7 @@ document.addEventListener('DOMContentLoaded', () => {
     bookmarks.forEach(pageNum => {
       const card = document.createElement('div');
       card.className = 'm-bookmark-card';
+      card.setAttribute('data-page', pageNum);
 
       const imgWrap = document.createElement('div');
       imgWrap.className = 'm-bookmark-img-wrap';
@@ -1071,6 +1136,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
       bookmarksList.appendChild(card);
     });
+
+    setupGridPinchZoom(bookmarksList);
   }
 
   bookmarksDrawerBtn.addEventListener('click', () => {

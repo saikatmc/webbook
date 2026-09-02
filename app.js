@@ -102,8 +102,8 @@ document.addEventListener('DOMContentLoaded', () => {
       audioPoolIndex = (audioPoolIndex + 1) % audioPool.length;
       audio.currentTime = 0;
       audio.volume = 0.85;
-      audio.play().catch(() => {});
-    } catch (e) {}
+      audio.play().catch(() => { });
+    } catch (e) { }
   }
 
   // Toast Helper
@@ -132,21 +132,34 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   applyTheme(currentTheme);
 
-  // Populate Pages - Uniform 'soft' density for every single page
+  // Populate Pages - Uniform 'soft' density with async decoding
   function populateBookPages() {
     flipbookEl.innerHTML = '';
     PAGE_IMAGES.forEach((src, idx) => {
       const pageDiv = document.createElement('div');
       pageDiv.className = 'flipbook-page';
-      pageDiv.setAttribute('data-density', 'soft'); // Uniform soft paper for all pages
+      pageDiv.setAttribute('data-density', 'soft');
 
       const img = document.createElement('img');
       img.src = src;
       img.alt = `Book Page ${idx + 1}`;
-      img.loading = idx < 4 ? 'eager' : 'lazy';
+      img.loading = idx < 6 ? 'eager' : 'lazy';
+      img.decoding = 'async';
 
       pageDiv.appendChild(img);
       flipbookEl.appendChild(pageDiv);
+    });
+  }
+
+  // Preload adjacent page textures for zero stutter
+  function preloadAdjacentPages(currentIndex) {
+    const indicesToPreload = [currentIndex - 1, currentIndex + 1, currentIndex + 2];
+    indicesToPreload.forEach(idx => {
+      if (idx >= 0 && idx < PAGE_IMAGES.length) {
+        const preImg = new Image();
+        preImg.decoding = 'async';
+        preImg.src = PAGE_IMAGES[idx];
+      }
     });
   }
 
@@ -157,7 +170,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const screenH = window.innerHeight;
 
     const isImmersive = document.body.classList.contains('immersive-mode');
-    const reservedVertical = isImmersive ? 12 : (isPortrait ? 136 : 58);
+    const reservedVertical = isImmersive ? 10 : (isPortrait ? 132 : 54);
     const availableH = Math.max(260, screenH - reservedVertical);
     const availableW = Math.max(240, screenW - 8);
 
@@ -208,11 +221,11 @@ document.addEventListener('DOMContentLoaded', () => {
       maxWidth: 1400,
       minHeight: 300,
       maxHeight: 1800,
-      maxShadowOpacity: 0.45,
-      showCover: false, // Uniform soft paper for all pages
+      maxShadowOpacity: 0.28,
+      showCover: false,
       usePortrait: true,
       mobileScrollSupport: false,
-      flippingTime: 600,
+      flippingTime: 420, // Snappy & smooth for low-end devices
       useMouseEvents: true,
       swipeDistance: 20,
       drawShadow: true
@@ -224,17 +237,19 @@ document.addEventListener('DOMContentLoaded', () => {
     pageFlip.on('flip', (e) => {
       playFlipSound();
       const currentPageIndex = e.data;
-      localStorage.setItem('flipbook_last_page', currentPageIndex); // Save reading progress
+      localStorage.setItem('flipbook_last_page', currentPageIndex);
       updateNavigationUI(currentPageIndex);
+      preloadAdjacentPages(currentPageIndex);
     });
 
     pageFlip.on('init', () => {
       updateNavigationUI(savedPage);
       totalPagesText.textContent = TOTAL_PAGES;
+      preloadAdjacentPages(savedPage);
       if (savedPage > 0 && typeof startIdx !== 'number') {
         setTimeout(() => {
           showToast(`📖 Resumed from Page ${savedPage + 1}`);
-        }, 600);
+        }, 500);
       }
     });
 
@@ -288,11 +303,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Touch & Swipe Navigation
+  // Touch & Swipe & 2-Finger Pinch-to-Zoom Navigation
   let touchStartX = 0;
   let touchStartY = 0;
   let touchStartTime = 0;
   let isSwiping = false;
+
+  let stagePinchStartDist = 0;
+  let stagePinchCenterX = 0;
+  let stagePinchCenterY = 0;
+  let stagePinchActive = false;
 
   readerStage.addEventListener('touchstart', (e) => {
     if (e.touches.length === 1) {
@@ -300,17 +320,46 @@ document.addEventListener('DOMContentLoaded', () => {
       touchStartY = e.touches[0].clientY;
       touchStartTime = Date.now();
       isSwiping = true;
+      stagePinchActive = false;
+    } else if (e.touches.length === 2) {
+      // 2 fingers detected on page -> prepare pinch-to-zoom
+      isSwiping = false;
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      stagePinchStartDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+      stagePinchCenterX = (t1.clientX + t2.clientX) / 2;
+      stagePinchCenterY = (t1.clientY + t2.clientY) / 2;
+      stagePinchActive = true;
     }
-  }, { passive: true });
+  }, { passive: false });
 
   readerStage.addEventListener('touchmove', (e) => {
-    if (!isSwiping || e.touches.length !== 1) return;
-  }, { passive: true });
+    if (e.touches.length === 2 && stagePinchActive) {
+      if (e.cancelable) e.preventDefault(); // Prevent browser whole-page zoom
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      const curDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+      const curMidX = (t1.clientX + t2.clientX) / 2;
+      const curMidY = (t1.clientY + t2.clientY) / 2;
+
+      // Pinch out or in gesture triggered on reader page
+      if (Math.abs(curDist - stagePinchStartDist) > 12) {
+        stagePinchActive = false;
+        const initialZoomRatio = curDist / (stagePinchStartDist || 1);
+        openZoomModalWithPinch(curMidX, curMidY, initialZoomRatio);
+      }
+    }
+  }, { passive: false });
 
   readerStage.addEventListener('touchend', (e) => {
+    if (stagePinchActive && e.touches.length < 2) {
+      stagePinchActive = false;
+    }
+
     if (!isSwiping) return;
     isSwiping = false;
 
+    if (e.changedTouches.length === 0) return;
     const touchEndX = e.changedTouches[0].clientX;
     const touchEndY = e.changedTouches[0].clientY;
     const diffX = touchEndX - touchStartX;
@@ -444,9 +493,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // Fullscreen
   fullscreenBtn.addEventListener('click', () => {
     if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen().catch(() => {});
+      document.documentElement.requestFullscreen().catch(() => { });
     } else {
-      document.exitFullscreen().catch(() => {});
+      document.exitFullscreen().catch(() => { });
     }
   });
 
@@ -619,64 +668,235 @@ document.addEventListener('DOMContentLoaded', () => {
     bookmarksModal.classList.remove('open');
   });
 
-  // Zoom Modal
-  function updateZoomTransform() {
-    zoomImageWrapper.style.transform = `translate(${zoomTranslateX}px, ${zoomTranslateY}px) scale(${zoomScale})`;
-    zoomLevelText.textContent = `${Math.round(zoomScale * 100)}%`;
+  // ==========================================
+  // High-Performance Zoom & Magnifier Engine (rAF Batched)
+  // ==========================================
+  let isRafPending = false;
+  let isSmoothTransitionActive = false;
+
+  function scheduleZoomRender(smooth = false) {
+    if (smooth) {
+      zoomImageWrapper.classList.add('smooth-transition');
+      isSmoothTransitionActive = true;
+    } else if (isSmoothTransitionActive) {
+      zoomImageWrapper.classList.remove('smooth-transition');
+      isSmoothTransitionActive = false;
+    }
+
+    if (!isRafPending) {
+      isRafPending = true;
+      requestAnimationFrame(() => {
+        zoomImageWrapper.style.transform = `translate3d(${zoomTranslateX}px, ${zoomTranslateY}px, 0) scale(${zoomScale})`;
+        zoomLevelText.textContent = `${Math.round(zoomScale * 100)}%`;
+        isRafPending = false;
+      });
+    }
   }
 
-  function openZoomModal() {
+  function openZoomModal(targetScale = 1.6, offsetX = 0, offsetY = 0) {
     const currentIdx = pageFlip ? pageFlip.getCurrentPageIndex() : 0;
     const pageNum = currentIdx + 1;
     zoomImage.src = PAGE_IMAGES[currentIdx];
     zoomPageTitle.textContent = `Page ${pageNum} • Magnifier`;
-    zoomScale = 1.5;
-    zoomTranslateX = 0;
-    zoomTranslateY = 0;
-    updateZoomTransform();
+    zoomScale = Math.min(4.5, Math.max(1.0, targetScale));
+    zoomTranslateX = offsetX;
+    zoomTranslateY = offsetY;
+    scheduleZoomRender(true);
     zoomViewerModal.classList.add('open');
   }
 
-  zoomToggleBtn.addEventListener('click', openZoomModal);
+  function openZoomModalWithPinch(focalScreenX, focalScreenY, pinchRatio) {
+    const currentIdx = pageFlip ? pageFlip.getCurrentPageIndex() : 0;
+    const pageNum = currentIdx + 1;
+    zoomImage.src = PAGE_IMAGES[currentIdx];
+    zoomPageTitle.textContent = `Page ${pageNum} • Magnifier`;
+
+    const rect = zoomCanvasArea.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+
+    const relX = focalScreenX - centerX;
+    const relY = focalScreenY - centerY;
+
+    const newScale = Math.min(4.5, Math.max(1.3, pinchRatio * 1.6));
+    zoomScale = newScale;
+    zoomTranslateX = -relX * (newScale - 1);
+    zoomTranslateY = -relY * (newScale - 1);
+
+    scheduleZoomRender(false);
+    zoomViewerModal.classList.add('open');
+  }
+
+  zoomToggleBtn.addEventListener('click', () => openZoomModal(1.6, 0, 0));
   closeZoomBtn.addEventListener('click', () => {
     zoomViewerModal.classList.remove('open');
   });
 
   zoomInBtn.addEventListener('click', () => {
-    zoomScale = Math.min(3.5, zoomScale + 0.3);
-    updateZoomTransform();
+    zoomScale = Math.min(4.5, zoomScale + 0.35);
+    scheduleZoomRender(true);
   });
 
   zoomOutBtn.addEventListener('click', () => {
-    zoomScale = Math.max(1.0, zoomScale - 0.3);
-    updateZoomTransform();
+    zoomScale = Math.max(1.0, zoomScale - 0.35);
+    if (zoomScale === 1.0) {
+      zoomTranslateX = 0;
+      zoomTranslateY = 0;
+    }
+    scheduleZoomRender(true);
   });
 
   zoomResetBtn.addEventListener('click', () => {
     zoomScale = 1.0;
     zoomTranslateX = 0;
     zoomTranslateY = 0;
-    updateZoomTransform();
+    scheduleZoomRender(true);
   });
+
+  // Touch Zoom / Pan Handling on Modal Canvas
+  let canvasLastPinchDist = 0;
+  let canvasLastMidX = 0;
+  let canvasLastMidY = 0;
+  let canvasLastPanX = 0;
+  let canvasLastPanY = 0;
+  let canvasLastTapTime = 0;
+  let canvasLastTapX = 0;
+  let canvasLastTapY = 0;
 
   zoomCanvasArea.addEventListener('touchstart', (e) => {
     if (e.touches.length === 1) {
-      isZoomPanning = true;
-      zoomStartX = e.touches[0].clientX - zoomTranslateX;
-      zoomStartY = e.touches[0].clientY - zoomTranslateY;
+      canvasLastPanX = e.touches[0].clientX;
+      canvasLastPanY = e.touches[0].clientY;
+      canvasLastPinchDist = 0;
+    } else if (e.touches.length === 2) {
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      canvasLastPinchDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+      canvasLastMidX = (t1.clientX + t2.clientX) / 2;
+      canvasLastMidY = (t1.clientY + t2.clientY) / 2;
     }
-  }, { passive: true });
+  }, { passive: false });
 
   zoomCanvasArea.addEventListener('touchmove', (e) => {
-    if (!isZoomPanning || e.touches.length !== 1) return;
-    zoomTranslateX = e.touches[0].clientX - zoomStartX;
-    zoomTranslateY = e.touches[0].clientY - zoomStartY;
-    updateZoomTransform();
-  }, { passive: true });
+    if (e.cancelable) e.preventDefault();
 
-  zoomCanvasArea.addEventListener('touchend', () => {
-    isZoomPanning = false;
+    if (e.touches.length === 2) {
+      // 2-Finger Pinch Zooming inside Magnifier
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+      const midX = (t1.clientX + t2.clientX) / 2;
+      const midY = (t1.clientY + t2.clientY) / 2;
+
+      if (canvasLastPinchDist > 0) {
+        const factor = dist / canvasLastPinchDist;
+        const newScale = Math.min(5.0, Math.max(1.0, zoomScale * factor));
+
+        const rect = zoomCanvasArea.getBoundingClientRect();
+        const cx = midX - (rect.left + rect.width / 2);
+        const cy = midY - (rect.top + rect.height / 2);
+
+        const scaleRatio = newScale / zoomScale;
+        zoomTranslateX = cx - (cx - zoomTranslateX) * scaleRatio + (midX - canvasLastMidX);
+        zoomTranslateY = cy - (cy - zoomTranslateY) * scaleRatio + (midY - canvasLastMidY);
+        zoomScale = newScale;
+
+        scheduleZoomRender(false);
+      }
+
+      canvasLastPinchDist = dist;
+      canvasLastMidX = midX;
+      canvasLastMidY = midY;
+
+    } else if (e.touches.length === 1 && zoomScale > 1.0) {
+      // 1-Finger Pan when zoomed in
+      const curX = e.touches[0].clientX;
+      const curY = e.touches[0].clientY;
+      const dx = curX - canvasLastPanX;
+      const dy = curY - canvasLastPanY;
+
+      zoomTranslateX += dx;
+      zoomTranslateY += dy;
+      canvasLastPanX = curX;
+      canvasLastPanY = curY;
+
+      scheduleZoomRender(false);
+    }
+  }, { passive: false });
+
+  zoomCanvasArea.addEventListener('touchend', (e) => {
+    if (e.touches.length === 0 && e.changedTouches.length === 1) {
+      // Double tap to quick zoom in / out
+      const now = Date.now();
+      const tapX = e.changedTouches[0].clientX;
+      const tapY = e.changedTouches[0].clientY;
+
+      if (now - canvasLastTapTime < 280 && Math.hypot(tapX - canvasLastTapX, tapY - canvasLastTapY) < 30) {
+        if (zoomScale < 1.4) {
+          const rect = zoomCanvasArea.getBoundingClientRect();
+          const cx = tapX - (rect.left + rect.width / 2);
+          const cy = tapY - (rect.top + rect.height / 2);
+          zoomScale = 2.4;
+          zoomTranslateX = -cx * 1.4;
+          zoomTranslateY = -cy * 1.4;
+        } else {
+          zoomScale = 1.0;
+          zoomTranslateX = 0;
+          zoomTranslateY = 0;
+        }
+        scheduleZoomRender(true);
+        canvasLastTapTime = 0;
+      } else {
+        canvasLastTapTime = now;
+        canvasLastTapX = tapX;
+        canvasLastTapY = tapY;
+      }
+    }
+
+    if (e.touches.length < 2) {
+      canvasLastPinchDist = 0;
+    }
   });
+
+  // Desktop Mouse Drag & Wheel Zoom
+  let isMouseDragging = false;
+  let mouseStartX = 0, mouseStartY = 0;
+
+  zoomCanvasArea.addEventListener('mousedown', (e) => {
+    if (e.button === 0) {
+      isMouseDragging = true;
+      mouseStartX = e.clientX - zoomTranslateX;
+      mouseStartY = e.clientY - zoomTranslateY;
+    }
+  });
+
+  window.addEventListener('mousemove', (e) => {
+    if (!isMouseDragging) return;
+    zoomTranslateX = e.clientX - mouseStartX;
+    zoomTranslateY = e.clientY - mouseStartY;
+    scheduleZoomRender(false);
+  });
+
+  window.addEventListener('mouseup', () => {
+    isMouseDragging = false;
+  });
+
+  zoomCanvasArea.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const rect = zoomCanvasArea.getBoundingClientRect();
+    const cx = e.clientX - (rect.left + rect.width / 2);
+    const cy = e.clientY - (rect.top + rect.height / 2);
+
+    const delta = e.deltaY < 0 ? 0.25 : -0.25;
+    const newScale = Math.min(5.0, Math.max(1.0, zoomScale + delta));
+    const scaleRatio = newScale / zoomScale;
+
+    zoomTranslateX = cx - (cx - zoomTranslateX) * scaleRatio;
+    zoomTranslateY = cy - (cy - zoomTranslateY) * scaleRatio;
+    zoomScale = newScale;
+
+    scheduleZoomRender(false);
+  }, { passive: false });
 
   // Direct Page Pill Jump
   document.getElementById('pageBadge').addEventListener('click', () => {
@@ -715,7 +935,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const currentIdx = pageFlip.getCurrentPageIndex();
       try {
         pageFlip.destroy();
-      } catch (e) {}
+      } catch (e) { }
       initFlipbook(currentIdx);
     }
   }

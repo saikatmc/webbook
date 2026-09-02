@@ -119,9 +119,11 @@ html, body {
   color: var(--text-main);
   touch-action: manipulation;
   transition: background-color var(--transition);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* Background Ambient Lighting */
+/* Background Ambient Lighting - Optimized for Low-End Devices (No continuous reflow/repaint) */
 .ambient-glow {
   position: fixed;
   inset: 0;
@@ -129,38 +131,33 @@ html, body {
   z-index: 0;
   background: var(--bg-gradient);
   overflow: hidden;
+  contain: strict;
 }
 
 .glow-orb {
   position: absolute;
   border-radius: 50%;
-  filter: blur(80px);
-  opacity: 0.65;
-  animation: floatOrb 16s ease-in-out infinite alternate;
+  opacity: 0.5;
+  pointer-events: none;
+  will-change: transform;
 }
 
 .orb-1 {
-  width: 380px;
-  height: 380px;
-  background: var(--glow-primary);
+  width: 340px;
+  height: 340px;
+  background: radial-gradient(circle, var(--glow-primary) 0%, rgba(0,0,0,0) 70%);
   top: 5%;
   left: 10%;
+  transform: translate3d(0, 0, 0);
 }
 
 .orb-2 {
-  width: 320px;
-  height: 320px;
-  background: var(--glow-secondary);
+  width: 280px;
+  height: 280px;
+  background: radial-gradient(circle, var(--glow-secondary) 0%, rgba(0,0,0,0) 70%);
   bottom: 8%;
   right: 5%;
-  animation-duration: 20s;
-  animation-delay: -6s;
-}
-
-@keyframes floatOrb {
-  0% { transform: translate(0, 0) scale(1); }
-  50% { transform: translate(30px, -20px) scale(1.1); }
-  100% { transform: translate(-20px, 30px) scale(0.95); }
+  transform: translate3d(0, 0, 0);
 }
 
 /* App Layout Shell */
@@ -408,7 +405,8 @@ html, body {
   overflow: hidden;
   margin: 0;
   padding: 0;
-  touch-action: pan-y pinch-zoom;
+  touch-action: none;
+  contain: layout size;
 }
 
 .book-viewport-container {
@@ -430,9 +428,10 @@ html, body {
   height: 22px;
   bottom: -12px;
   background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.75) 0%, rgba(0, 0, 0, 0) 70%);
-  filter: blur(10px);
+  filter: blur(8px);
   pointer-events: none;
   z-index: 0;
+  transform: translate3d(0, 0, 0);
 }
 
 .book-3d-stage {
@@ -441,6 +440,7 @@ html, body {
   align-items: center;
   justify-content: center;
   z-index: 1;
+  transform: translate3d(0, 0, 0);
 }
 
 /* Flipbook element */
@@ -449,6 +449,7 @@ html, body {
   border-radius: 6px;
   overflow: visible;
   position: relative;
+  transform: translate3d(0, 0, 0);
 }
 
 .flipbook-page {
@@ -462,7 +463,8 @@ html, body {
   transform-style: preserve-3d;
   -webkit-backface-visibility: hidden;
   backface-visibility: hidden;
-  will-change: transform, opacity;
+  will-change: transform;
+  transform: translateZ(0);
 }
 
 .flipbook-page img {
@@ -472,6 +474,8 @@ html, body {
   display: block;
   pointer-events: none;
   user-select: none;
+  -webkit-user-drag: none;
+  image-rendering: auto;
 }
 
 /* Autoplay Chip */
@@ -1004,15 +1008,14 @@ body.immersive-mode .mobile-bottom-dock {
 .mobile-zoom-modal {
   position: fixed;
   inset: 0;
-  background: rgba(5, 7, 12, 0.96);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: rgba(5, 7, 12, 0.98);
   display: flex;
   flex-direction: column;
   opacity: 0;
   pointer-events: none;
   transition: opacity var(--transition);
   z-index: 150;
+  contain: strict;
 }
 
 .mobile-zoom-modal.open {
@@ -1027,6 +1030,7 @@ body.immersive-mode .mobile-bottom-dock {
   padding: 8px 14px;
   border-radius: 0;
   border-bottom: 1px solid var(--dock-border);
+  z-index: 10;
 }
 
 .zoom-title {
@@ -1066,20 +1070,40 @@ body.immersive-mode .mobile-bottom-dock {
   align-items: center;
   justify-content: center;
   touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: grab;
+}
+
+.zoom-viewport:active {
+  cursor: grabbing;
 }
 
 .zoom-img-container {
   position: absolute;
-  transition: transform 0.05s ease-out;
-  transform-origin: center center;
+  top: 50%;
+  left: 50%;
+  transform-origin: 0 0;
+  will-change: transform;
+  transform: translate3d(0, 0, 0);
+  pointer-events: none;
+}
+
+.zoom-img-container.smooth-transition {
+  transition: transform 0.28s cubic-bezier(0.2, 0.9, 0.3, 1);
 }
 
 .zoom-img-container img {
-  max-width: 90vw;
-  max-height: 80vh;
+  max-width: 88vw;
+  max-height: 78vh;
   object-fit: contain;
   border-radius: 4px;
   box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+  display: block;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+  transform: translate(-50%, -50%);
 }
 
 .zoom-bottom-tip {
@@ -1088,12 +1112,14 @@ body.immersive-mode .mobile-bottom-dock {
   left: 50%;
   transform: translateX(-50%);
   background: rgba(0, 0, 0, 0.75);
-  padding: 4px 12px;
+  padding: 5px 14px;
   border-radius: var(--radius-full);
   font-size: 0.68rem;
   color: var(--text-sub);
   white-space: nowrap;
   pointer-events: none;
+  z-index: 10;
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 /* Toast */

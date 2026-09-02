@@ -61,10 +61,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const bookmarkCountBadge = document.getElementById('bookmarkCountBadge');
 
   const bookmarkPeekOverlay = document.getElementById('bookmarkPeekOverlay');
+  const bookmarkPeekBackdrop = document.getElementById('bookmarkPeekBackdrop');
   const bookmarkPeekTitleText = document.getElementById('bookmarkPeekTitleText');
   const bookmarkPeekImgWrap = document.getElementById('bookmarkPeekImgWrap');
   const bookmarkPeekImg = document.getElementById('bookmarkPeekImg');
   const bookmarkPeekHintText = document.getElementById('bookmarkPeekHintText');
+  const closeBookmarkPeekBtn = document.getElementById('closeBookmarkPeekBtn');
+  const peekJumpBtn = document.getElementById('peekJumpBtn');
+  const peekCloseBottomBtn = document.getElementById('peekCloseBottomBtn');
 
   const zoomToggleBtn = document.getElementById('zoomToggleBtn');
   const zoomViewerModal = document.getElementById('zoomViewerModal');
@@ -599,94 +603,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // Build Thumbnail Grid
-  function buildThumbnailsGrid() {
-    thumbnailsGrid.innerHTML = '';
-    PAGE_IMAGES.forEach((src, idx) => {
-      const card = document.createElement('div');
-      card.className = `m-thumb-card ${idx === 0 ? 'active' : ''}`;
-      card.setAttribute('data-page', idx + 1);
-
-      const img = document.createElement('img');
-      img.src = src;
-      img.alt = `Page ${idx + 1}`;
-      img.loading = 'lazy';
-
-      const numBadge = document.createElement('span');
-      numBadge.className = 'm-thumb-num';
-      numBadge.textContent = `${idx + 1}`;
-
-      card.appendChild(img);
-      card.appendChild(numBadge);
-
-      card.addEventListener('click', () => {
-        turnToPage(idx + 1);
-        thumbnailsDrawer.classList.remove('open');
-      });
-
-      thumbnailsGrid.appendChild(card);
-    });
-  }
-
-  thumbnailsToggleBtn.addEventListener('click', () => {
-    thumbnailsDrawer.classList.toggle('open');
-  });
-
-  closeThumbnailsBtn.addEventListener('click', () => {
-    thumbnailsDrawer.classList.remove('open');
-  });
-
-  jumpPageBtn.addEventListener('click', () => {
-    const val = parseInt(jumpPageInput.value, 10);
-    if (!isNaN(val) && val >= 1 && val <= TOTAL_PAGES) {
-      turnToPage(val);
-      thumbnailsDrawer.classList.remove('open');
-      jumpPageInput.value = '';
-    } else {
-      showToast('⚠️ Enter 1 to 56');
-    }
-  });
-
-  jumpPageInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') jumpPageBtn.click();
-  });
-
-  // Bookmarks Logic
-  function updateBookmarkBadge() {
-    bookmarkCountBadge.textContent = bookmarks.length;
-  }
-
-  function updateBookmarkButtonState(pageNum) {
-    if (bookmarks.includes(pageNum)) {
-      bookmarkCurrentBtn.classList.add('active');
-    } else {
-      bookmarkCurrentBtn.classList.remove('active');
-    }
-  }
-
-  function toggleBookmark(pageNum) {
-    const idx = bookmarks.indexOf(pageNum);
-    if (idx > -1) {
-      bookmarks.splice(idx, 1);
-      showToast(`☆ Removed Bookmark (Page ${pageNum})`);
-    } else {
-      bookmarks.push(pageNum);
-      bookmarks.sort((a, b) => a - b);
-      showToast(`★ Bookmarked Page ${pageNum}`);
-    }
-    localStorage.setItem('flipbook_bookmarks', JSON.stringify(bookmarks));
-    updateBookmarkBadge();
-    updateBookmarkButtonState(pageNum);
-    renderBookmarksList();
-  }
-
-  bookmarkCurrentBtn.addEventListener('click', () => {
-    const current = (pageFlip ? pageFlip.getCurrentPageIndex() : 0) + 1;
-    toggleBookmark(current);
-  });
-
   // ==========================================
-  // Bookmark Quick-Peek & Pinch-to-Zoom Engine
+  // High-Performance Quick-Peek & Pinch-Zoom Engine (Bookmarks & Gallery)
   // ==========================================
   let isPeekActive = false;
   let activePeekPage = 1;
@@ -717,7 +635,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     bookmarkPeekImg.src = PAGE_IMAGES[pageNum - 1];
     bookmarkPeekTitleText.textContent = `Page ${pageNum} • Quick Peek`;
-    bookmarkPeekHintText.textContent = 'Release fingers to close';
+    if (bookmarkPeekHintText) {
+      bookmarkPeekHintText.textContent = 'Pinch to zoom';
+    }
 
     renderPeekTransform();
     bookmarkPeekOverlay.classList.add('open');
@@ -744,18 +664,45 @@ document.addEventListener('DOMContentLoaded', () => {
         peekTranslateY = 0;
         renderPeekTransform();
       }
-    }, 220);
+    }, 240);
   }
 
-  // Overlay tap/click safeguard to dismiss
-  bookmarkPeekOverlay.addEventListener('click', () => {
-    closeBookmarkPeek();
-  });
+  // Dismiss listeners
+  if (closeBookmarkPeekBtn) {
+    closeBookmarkPeekBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeBookmarkPeek();
+    });
+  }
+
+  if (peekCloseBottomBtn) {
+    peekCloseBottomBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeBookmarkPeek();
+    });
+  }
+
+  if (bookmarkPeekBackdrop) {
+    bookmarkPeekBackdrop.addEventListener('click', () => {
+      closeBookmarkPeek();
+    });
+  }
+
+  if (peekJumpBtn) {
+    peekJumpBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      turnToPage(activePeekPage);
+      closeBookmarkPeek();
+      if (bookmarksModal) bookmarksModal.classList.remove('open');
+      if (thumbnailsDrawer) thumbnailsDrawer.classList.remove('open');
+    });
+  }
 
   // Touch & Pinch gestures inside the Peek Viewport itself
   let peekViewportLastPinchDist = 0;
   let peekViewportLastPanX = 0;
   let peekViewportLastPanY = 0;
+  let peekLastTapTime = 0;
 
   bookmarkPeekViewport.addEventListener('touchstart', (e) => {
     if (e.touches.length === 2) {
@@ -765,6 +712,7 @@ document.addEventListener('DOMContentLoaded', () => {
     } else if (e.touches.length === 1) {
       peekViewportLastPanX = e.touches[0].clientX;
       peekViewportLastPanY = e.touches[0].clientY;
+      peekViewportLastPinchDist = 0;
     }
   }, { passive: false });
 
@@ -792,22 +740,42 @@ document.addEventListener('DOMContentLoaded', () => {
   }, { passive: false });
 
   bookmarkPeekViewport.addEventListener('touchend', (e) => {
-    if (e.touches.length === 0) {
-      closeBookmarkPeek();
-    } else if (e.touches.length < 2) {
+    if (e.touches.length < 2) {
       peekViewportLastPinchDist = 0;
+    }
+    // Double tap to toggle zoom
+    if (e.touches.length === 0 && e.changedTouches.length === 1) {
+      const now = Date.now();
+      if (now - peekLastTapTime < 280) {
+        if (peekScale > 1.5) {
+          updateBookmarkPeek(1.0, 0, 0);
+        } else {
+          updateBookmarkPeek(2.5, 0, 0);
+        }
+        peekLastTapTime = 0;
+      } else {
+        peekLastTapTime = now;
+      }
     }
   }, { passive: true });
 
-  // Attach Peek Gestures (2-Finger Pinch Zoom & Hold-to-Peek)
-  function attachBookmarkGestures(card, imgWrap, pageNum, peekBtn) {
+  // Mouse Wheel Zoom inside Peek Modal
+  bookmarkPeekViewport.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const delta = e.deltaY < 0 ? 0.3 : -0.3;
+    const targetScale = Math.min(5.0, Math.max(1.0, peekScale + delta));
+    updateBookmarkPeek(targetScale, peekTranslateX, peekTranslateY);
+  }, { passive: false });
+
+  // Reusable Card Peek Gesture Handler (Bookmarks & Gallery Cards)
+  function attachCardPeekGestures(card, imgWrap, pageNum, peekBtn, onJump) {
     let holdTimer = null;
     let isHolding = false;
     let suppressClick = false;
     let touchStartX = 0;
     let touchStartY = 0;
     let pinchStartDist = 0;
-    let pinchStartScale = 1.7;
+    let pinchStartScale = 1.8;
     let pinchStartMidX = 0;
     let pinchStartMidY = 0;
 
@@ -875,7 +843,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const curY = e.touches[0].clientY;
         const dist = Math.hypot(curX - touchStartX, curY - touchStartY);
 
-        if (!isHolding && dist > 12) {
+        if (!isHolding && dist > 10) {
           // Scrolling list -> cancel hold timer
           clearTimeout(holdTimer);
         }
@@ -891,9 +859,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function handleTouchEnd() {
       clearTimeout(holdTimer);
-      if (isPeekActive) {
-        closeBookmarkPeek();
-        setTimeout(() => { suppressClick = false; }, 140);
+      if (isHolding || isPeekActive) {
+        // Modal stays open per user requirement; protect against accidental jump click
+        setTimeout(() => { suppressClick = false; }, 250);
       }
       isHolding = false;
     }
@@ -906,33 +874,18 @@ document.addEventListener('DOMContentLoaded', () => {
     let mouseStartX = 0;
     let mouseStartY = 0;
 
-    imgWrap.addEventListener('mousedown', (e) => {
-      if (e.button !== 0) return;
-      mouseStartX = e.clientX;
-      mouseStartY = e.clientY;
-      mouseTimer = setTimeout(() => {
-        isHolding = true;
-        suppressClick = true;
-        openBookmarkPeek(pageNum, 1.8, 0, 0);
-      }, 220);
-    });
-
-    window.addEventListener('mousemove', (e) => {
-      if (isPeekActive && isHolding) {
-        const dx = (e.clientX - mouseStartX) * 0.8;
-        const dy = (e.clientY - mouseStartY) * 0.8;
-        updateBookmarkPeek(peekScale, dx, dy);
-      }
-    });
-
-    window.addEventListener('mouseup', () => {
-      clearTimeout(mouseTimer);
-      if (isPeekActive && isHolding) {
-        closeBookmarkPeek();
-        setTimeout(() => { suppressClick = false; }, 100);
-      }
-      isHolding = false;
-    });
+    if (imgWrap) {
+      imgWrap.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return;
+        mouseStartX = e.clientX;
+        mouseStartY = e.clientY;
+        mouseTimer = setTimeout(() => {
+          isHolding = true;
+          suppressClick = true;
+          openBookmarkPeek(pageNum, 1.8, 0, 0);
+        }, 220);
+      });
+    }
 
     // Peek Button Quick Click
     if (peekBtn) {
@@ -948,10 +901,103 @@ document.addEventListener('DOMContentLoaded', () => {
         e.stopPropagation();
         return;
       }
-      turnToPage(pageNum);
-      bookmarksModal.classList.remove('open');
+      if (typeof onJump === 'function') {
+        onJump();
+      } else {
+        turnToPage(pageNum);
+        if (bookmarksModal) bookmarksModal.classList.remove('open');
+        if (thumbnailsDrawer) thumbnailsDrawer.classList.remove('open');
+      }
     });
   }
+
+  // Build Thumbnail Grid (Gallery)
+  function buildThumbnailsGrid() {
+    thumbnailsGrid.innerHTML = '';
+    PAGE_IMAGES.forEach((src, idx) => {
+      const pageNum = idx + 1;
+      const card = document.createElement('div');
+      card.className = `m-thumb-card ${idx === 0 ? 'active' : ''}`;
+      card.setAttribute('data-page', pageNum);
+
+      const img = document.createElement('img');
+      img.src = src;
+      img.alt = `Page ${pageNum}`;
+      img.loading = 'lazy';
+
+      const numBadge = document.createElement('span');
+      numBadge.className = 'm-thumb-num';
+      numBadge.textContent = `${pageNum}`;
+
+      card.appendChild(img);
+      card.appendChild(numBadge);
+
+      // Attach 2-Finger Pinch Zoom & Hold-to-Peek to Gallery Card
+      attachCardPeekGestures(card, img, pageNum, null, () => {
+        turnToPage(pageNum);
+        thumbnailsDrawer.classList.remove('open');
+      });
+
+      thumbnailsGrid.appendChild(card);
+    });
+  }
+
+  thumbnailsToggleBtn.addEventListener('click', () => {
+    thumbnailsDrawer.classList.toggle('open');
+  });
+
+  closeThumbnailsBtn.addEventListener('click', () => {
+    thumbnailsDrawer.classList.remove('open');
+  });
+
+  jumpPageBtn.addEventListener('click', () => {
+    const val = parseInt(jumpPageInput.value, 10);
+    if (!isNaN(val) && val >= 1 && val <= TOTAL_PAGES) {
+      turnToPage(val);
+      thumbnailsDrawer.classList.remove('open');
+      jumpPageInput.value = '';
+    } else {
+      showToast('⚠️ Enter 1 to 56');
+    }
+  });
+
+  jumpPageInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') jumpPageBtn.click();
+  });
+
+  // Bookmarks Logic
+  function updateBookmarkBadge() {
+    bookmarkCountBadge.textContent = bookmarks.length;
+  }
+
+  function updateBookmarkButtonState(pageNum) {
+    if (bookmarks.includes(pageNum)) {
+      bookmarkCurrentBtn.classList.add('active');
+    } else {
+      bookmarkCurrentBtn.classList.remove('active');
+    }
+  }
+
+  function toggleBookmark(pageNum) {
+    const idx = bookmarks.indexOf(pageNum);
+    if (idx > -1) {
+      bookmarks.splice(idx, 1);
+      showToast(`☆ Removed Bookmark (Page ${pageNum})`);
+    } else {
+      bookmarks.push(pageNum);
+      bookmarks.sort((a, b) => a - b);
+      showToast(`★ Bookmarked Page ${pageNum}`);
+    }
+    localStorage.setItem('flipbook_bookmarks', JSON.stringify(bookmarks));
+    updateBookmarkBadge();
+    updateBookmarkButtonState(pageNum);
+    renderBookmarksList();
+  }
+
+  bookmarkCurrentBtn.addEventListener('click', () => {
+    const current = (pageFlip ? pageFlip.getCurrentPageIndex() : 0) + 1;
+    toggleBookmark(current);
+  });
 
   function renderBookmarksList() {
     bookmarksList.innerHTML = '';
@@ -1018,7 +1064,10 @@ document.addEventListener('DOMContentLoaded', () => {
       card.appendChild(imgWrap);
       card.appendChild(meta);
 
-      attachBookmarkGestures(card, imgWrap, pageNum, peekBtn);
+      attachCardPeekGestures(card, imgWrap, pageNum, peekBtn, () => {
+        turnToPage(pageNum);
+        bookmarksModal.classList.remove('open');
+      });
 
       bookmarksList.appendChild(card);
     });

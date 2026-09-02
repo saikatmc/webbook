@@ -286,9 +286,9 @@
       </div>
     </div>
 
-    <!-- Bookmark Quick-Peek Zoom Overlay (Hold / Two-Finger Pinch to Zoom & Release to Close) -->
+    <!-- Quick-Peek Zoom Overlay (Bookmarks & Gallery) -->
     <div class="bookmark-peek-overlay" id="bookmarkPeekOverlay" aria-hidden="true">
-      <div class="bookmark-peek-backdrop"></div>
+      <div class="bookmark-peek-backdrop" id="bookmarkPeekBackdrop"></div>
       <div class="bookmark-peek-box" id="bookmarkPeekBox">
         <div class="bookmark-peek-header">
           <div class="bookmark-peek-title" id="bookmarkPeekTitle">
@@ -298,15 +298,27 @@
             </svg>
             <span id="bookmarkPeekTitleText">Page 1 • Quick Peek</span>
           </div>
-          <div class="bookmark-peek-hint">
-            <span class="peek-dot"></span>
-            <span id="bookmarkPeekHintText">Release to close • Pinch to zoom</span>
+          <div class="bookmark-peek-top-actions">
+            <div class="bookmark-peek-hint">
+              <span class="peek-dot"></span>
+              <span id="bookmarkPeekHintText">Pinch to zoom</span>
+            </div>
+            <button class="sheet-close-btn" id="closeBookmarkPeekBtn" aria-label="Close Preview">✕</button>
           </div>
         </div>
         <div class="bookmark-peek-viewport" id="bookmarkPeekViewport">
           <div class="bookmark-peek-img-wrap" id="bookmarkPeekImgWrap">
-            <img id="bookmarkPeekImg" src="" alt="Bookmark Quick Peek" draggable="false" />
+            <img id="bookmarkPeekImg" src="" alt="Page Quick Peek" draggable="false" />
           </div>
+        </div>
+        <div class="bookmark-peek-footer">
+          <button class="peek-jump-btn" id="peekJumpBtn">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <polyline points="9 18 15 12 9 6"></polyline>
+            </svg>
+            <span>Open This Page</span>
+          </button>
+          <button class="peek-close-bottom-btn" id="peekCloseBottomBtn">Close</button>
         </div>
       </div>
     </div>

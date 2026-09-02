@@ -181,16 +181,27 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Calculate Dynamic Dimensions - Maximize Screen Fill across all mobile devices
+  // Calculate Dynamic Dimensions - Maximize Screen Fill across all devices
   function getMobileBookDimensions() {
     const isPortrait = window.innerHeight >= window.innerWidth;
     const screenW = window.innerWidth;
     const screenH = window.innerHeight;
 
-    const isImmersive = document.body.classList.contains('immersive-mode') || !!document.fullscreenElement;
-    const reservedVertical = isImmersive ? 10 : (isPortrait ? 132 : 54);
+    const isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
+    const isImmersive = document.body.classList.contains('immersive-mode');
+
+    // Reserve header/footer space unless in immersive mode
+    let reservedVertical = 54;
+    if (isImmersive) {
+      reservedVertical = 8;
+    } else if (isPortrait) {
+      reservedVertical = isFullscreen ? 110 : 132;
+    } else {
+      reservedVertical = isFullscreen ? 48 : 56;
+    }
+
     const availableH = Math.max(260, screenH - reservedVertical);
-    const availableW = Math.max(240, screenW - 8);
+    const availableW = Math.max(240, screenW - 12);
 
     let pageW, pageH;
 
@@ -203,6 +214,7 @@ document.addEventListener('DOMContentLoaded', () => {
         pageH = pageW / 0.725;
       }
     } else {
+      // In landscape (2-page spread), two pages fit side by side
       pageH = availableH;
       pageW = pageH * 0.725;
       if (pageW > (availableW / 2)) {
@@ -212,8 +224,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     return {
-      width: Math.round(pageW),
-      height: Math.round(pageH)
+      width: Math.max(160, Math.round(pageW)),
+      height: Math.max(220, Math.round(pageH)),
+      isPortrait: isPortrait
     };
   }
 
@@ -223,7 +236,10 @@ document.addEventListener('DOMContentLoaded', () => {
     populateBookPages(flipbook);
     const dims = getMobileBookDimensions();
 
-    flipbook.style.width = `${dims.width}px`;
+    const isLandscape = !dims.isPortrait && (window.innerWidth >= 2 * dims.width);
+    const totalBookWidth = isLandscape ? (dims.width * 2) : dims.width;
+
+    flipbook.style.width = `${totalBookWidth}px`;
     flipbook.style.height = `${dims.height}px`;
 
     // Retrieve last saved reading progress
@@ -236,15 +252,15 @@ document.addEventListener('DOMContentLoaded', () => {
       width: dims.width,
       height: dims.height,
       size: 'fixed',
-      minWidth: 220,
-      maxWidth: 1400,
-      minHeight: 300,
-      maxHeight: 1800,
+      minWidth: 160,
+      maxWidth: 2400,
+      minHeight: 220,
+      maxHeight: 2400,
       maxShadowOpacity: 0.28,
       showCover: false,
       usePortrait: true,
       mobileScrollSupport: false,
-      flippingTime: 420, // Snappy & smooth for low-end devices
+      flippingTime: 420, // Snappy & smooth
       useMouseEvents: true,
       swipeDistance: 20,
       drawShadow: true
@@ -272,7 +288,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
 
-    buildThumbnailsGrid();
     updateBookmarkBadge();
   }
 
@@ -510,18 +525,37 @@ document.addEventListener('DOMContentLoaded', () => {
   stopAutoplayBtn.addEventListener('click', stopAutoplay);
 
   // Fullscreen
-  fullscreenBtn.addEventListener('click', () => {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen().catch(() => { });
-    } else {
-      document.exitFullscreen().catch(() => { });
+  fullscreenBtn.addEventListener('click', async () => {
+    try {
+      const isFull = !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement);
+      if (!isFull) {
+        const elem = document.documentElement;
+        if (elem.requestFullscreen) {
+          await elem.requestFullscreen();
+        } else if (elem.webkitRequestFullscreen) {
+          await elem.webkitRequestFullscreen();
+        } else if (elem.msRequestFullscreen) {
+          await elem.msRequestFullscreen();
+        }
+      } else {
+        if (document.exitFullscreen) {
+          await document.exitFullscreen();
+        } else if (document.webkitExitFullscreen) {
+          await document.webkitExitFullscreen();
+        } else if (document.msExitFullscreen) {
+          await document.msExitFullscreen();
+        }
+      }
+    } catch (err) {
+      console.warn('Fullscreen error:', err);
     }
   });
 
-  document.addEventListener('fullscreenchange', () => {
+  function onFullscreenStateChange() {
+    const isFull = !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement);
     const maxIcon = fullscreenBtn.querySelector('.maximize-icon');
     const minIcon = fullscreenBtn.querySelector('.minimize-icon');
-    if (document.fullscreenElement) {
+    if (isFull) {
       maxIcon.classList.add('hidden');
       minIcon.classList.remove('hidden');
       fullscreenBtn.classList.add('active');
@@ -533,7 +567,11 @@ document.addEventListener('DOMContentLoaded', () => {
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {
       handleMobileResize(true);
-    }, 100);
+    }, 150);
+  }
+
+  ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange'].forEach(evt => {
+    document.addEventListener(evt, onFullscreenStateChange);
   });
 
   // Theme Sheet
@@ -1002,5 +1040,6 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Initialize Application
+  buildThumbnailsGrid();
   initFlipbook();
 });

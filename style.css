@@ -112,7 +112,9 @@ body.theme-lumina {
 html, body {
   width: 100%;
   height: 100%;
-  position: fixed;
+  min-height: 100%;
+  margin: 0;
+  padding: 0;
   overflow: hidden;
   font-family: var(--font-sans);
   background-color: var(--bg-main);
@@ -121,6 +123,10 @@ html, body {
   transition: background-color var(--transition);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+:fullscreen, ::backdrop {
+  background-color: var(--bg-main);
 }
 
 /* Background Ambient Lighting - Optimized for Low-End Devices (No continuous reflow/repaint) */

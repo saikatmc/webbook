@@ -60,6 +60,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const emptyBookmarksMsg = document.getElementById('emptyBookmarksMsg');
   const bookmarkCountBadge = document.getElementById('bookmarkCountBadge');
 
+  const bookmarkPeekOverlay = document.getElementById('bookmarkPeekOverlay');
+  const bookmarkPeekTitleText = document.getElementById('bookmarkPeekTitleText');
+  const bookmarkPeekImgWrap = document.getElementById('bookmarkPeekImgWrap');
+  const bookmarkPeekImg = document.getElementById('bookmarkPeekImg');
+  const bookmarkPeekHintText = document.getElementById('bookmarkPeekHintText');
+
   const zoomToggleBtn = document.getElementById('zoomToggleBtn');
   const zoomViewerModal = document.getElementById('zoomViewerModal');
   const closeZoomBtn = document.getElementById('closeZoomBtn');
@@ -679,6 +685,274 @@ document.addEventListener('DOMContentLoaded', () => {
     toggleBookmark(current);
   });
 
+  // ==========================================
+  // Bookmark Quick-Peek & Pinch-to-Zoom Engine
+  // ==========================================
+  let isPeekActive = false;
+  let activePeekPage = 1;
+  let peekScale = 1.7;
+  let peekTranslateX = 0;
+  let peekTranslateY = 0;
+  let peekRafPending = false;
+
+  function renderPeekTransform() {
+    if (!peekRafPending) {
+      peekRafPending = true;
+      requestAnimationFrame(() => {
+        if (bookmarkPeekImgWrap) {
+          bookmarkPeekImgWrap.style.transform = `translate3d(${peekTranslateX}px, ${peekTranslateY}px, 0) scale(${peekScale})`;
+        }
+        peekRafPending = false;
+      });
+    }
+  }
+
+  function openBookmarkPeek(pageNum, initialScale = 1.7, offsetX = 0, offsetY = 0) {
+    if (!PAGE_IMAGES[pageNum - 1]) return;
+    activePeekPage = pageNum;
+    isPeekActive = true;
+    peekScale = Math.min(5.0, Math.max(1.0, initialScale));
+    peekTranslateX = offsetX;
+    peekTranslateY = offsetY;
+
+    bookmarkPeekImg.src = PAGE_IMAGES[pageNum - 1];
+    bookmarkPeekTitleText.textContent = `Page ${pageNum} • Quick Peek`;
+    bookmarkPeekHintText.textContent = 'Release fingers to close';
+
+    renderPeekTransform();
+    bookmarkPeekOverlay.classList.add('open');
+    bookmarkPeekOverlay.setAttribute('aria-hidden', 'false');
+  }
+
+  function updateBookmarkPeek(newScale, newTx, newTy) {
+    if (!isPeekActive) return;
+    peekScale = Math.min(5.0, Math.max(1.0, newScale));
+    peekTranslateX = newTx;
+    peekTranslateY = newTy;
+    renderPeekTransform();
+  }
+
+  function closeBookmarkPeek() {
+    if (!isPeekActive) return;
+    isPeekActive = false;
+    bookmarkPeekOverlay.classList.remove('open');
+    bookmarkPeekOverlay.setAttribute('aria-hidden', 'true');
+    setTimeout(() => {
+      if (!isPeekActive) {
+        peekScale = 1.7;
+        peekTranslateX = 0;
+        peekTranslateY = 0;
+        renderPeekTransform();
+      }
+    }, 220);
+  }
+
+  // Overlay tap/click safeguard to dismiss
+  bookmarkPeekOverlay.addEventListener('click', () => {
+    closeBookmarkPeek();
+  });
+
+  // Touch & Pinch gestures inside the Peek Viewport itself
+  let peekViewportLastPinchDist = 0;
+  let peekViewportLastPanX = 0;
+  let peekViewportLastPanY = 0;
+
+  bookmarkPeekViewport.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 2) {
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      peekViewportLastPinchDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+    } else if (e.touches.length === 1) {
+      peekViewportLastPanX = e.touches[0].clientX;
+      peekViewportLastPanY = e.touches[0].clientY;
+    }
+  }, { passive: false });
+
+  bookmarkPeekViewport.addEventListener('touchmove', (e) => {
+    if (e.cancelable) e.preventDefault();
+    if (e.touches.length === 2) {
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+      if (peekViewportLastPinchDist > 0) {
+        const factor = dist / peekViewportLastPinchDist;
+        const newScale = Math.min(5.0, Math.max(1.0, peekScale * factor));
+        updateBookmarkPeek(newScale, peekTranslateX, peekTranslateY);
+      }
+      peekViewportLastPinchDist = dist;
+    } else if (e.touches.length === 1 && peekScale > 1.0) {
+      const curX = e.touches[0].clientX;
+      const curY = e.touches[0].clientY;
+      const dx = curX - peekViewportLastPanX;
+      const dy = curY - peekViewportLastPanY;
+      peekViewportLastPanX = curX;
+      peekViewportLastPanY = curY;
+      updateBookmarkPeek(peekScale, peekTranslateX + dx, peekTranslateY + dy);
+    }
+  }, { passive: false });
+
+  bookmarkPeekViewport.addEventListener('touchend', (e) => {
+    if (e.touches.length === 0) {
+      closeBookmarkPeek();
+    } else if (e.touches.length < 2) {
+      peekViewportLastPinchDist = 0;
+    }
+  }, { passive: true });
+
+  // Attach Peek Gestures (2-Finger Pinch Zoom & Hold-to-Peek)
+  function attachBookmarkGestures(card, imgWrap, pageNum, peekBtn) {
+    let holdTimer = null;
+    let isHolding = false;
+    let suppressClick = false;
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let pinchStartDist = 0;
+    let pinchStartScale = 1.7;
+    let pinchStartMidX = 0;
+    let pinchStartMidY = 0;
+
+    // Touch Event Handling
+    card.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 2) {
+        // Two fingers detected -> immediately trigger quick-peek zoom!
+        if (e.cancelable) e.preventDefault();
+        isHolding = false;
+        suppressClick = true;
+        clearTimeout(holdTimer);
+
+        const t1 = e.touches[0];
+        const t2 = e.touches[1];
+        pinchStartDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+        pinchStartMidX = (t1.clientX + t2.clientX) / 2;
+        pinchStartMidY = (t1.clientY + t2.clientY) / 2;
+        pinchStartScale = 1.8;
+
+        openBookmarkPeek(pageNum, pinchStartScale, 0, 0);
+        if (navigator.vibrate) {
+          try { navigator.vibrate(15); } catch (err) {}
+        }
+      } else if (e.touches.length === 1) {
+        // 1 finger touch -> start hold timer (240ms) for press-and-hold peek
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+
+        holdTimer = setTimeout(() => {
+          isHolding = true;
+          suppressClick = true;
+          openBookmarkPeek(pageNum, 1.8, 0, 0);
+          if (navigator.vibrate) {
+            try { navigator.vibrate(25); } catch (err) {}
+          }
+        }, 240);
+      }
+    }, { passive: false });
+
+    card.addEventListener('touchmove', (e) => {
+      if (e.touches.length === 2) {
+        if (e.cancelable) e.preventDefault();
+        const t1 = e.touches[0];
+        const t2 = e.touches[1];
+        const curDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+        const curMidX = (t1.clientX + t2.clientX) / 2;
+        const curMidY = (t1.clientY + t2.clientY) / 2;
+
+        if (!isPeekActive) {
+          suppressClick = true;
+          clearTimeout(holdTimer);
+          pinchStartDist = curDist;
+          pinchStartMidX = curMidX;
+          pinchStartMidY = curMidY;
+          openBookmarkPeek(pageNum, 1.8, 0, 0);
+        } else {
+          const ratio = curDist / (pinchStartDist || curDist);
+          const targetScale = Math.min(5.0, Math.max(1.1, pinchStartScale * ratio));
+          const dx = (curMidX - pinchStartMidX) * 0.9;
+          const dy = (curMidY - pinchStartMidY) * 0.9;
+          updateBookmarkPeek(targetScale, dx, dy);
+        }
+      } else if (e.touches.length === 1) {
+        const curX = e.touches[0].clientX;
+        const curY = e.touches[0].clientY;
+        const dist = Math.hypot(curX - touchStartX, curY - touchStartY);
+
+        if (!isHolding && dist > 12) {
+          // Scrolling list -> cancel hold timer
+          clearTimeout(holdTimer);
+        }
+
+        if (isPeekActive && isHolding) {
+          if (e.cancelable) e.preventDefault();
+          const dx = (curX - touchStartX) * 0.85;
+          const dy = (curY - touchStartY) * 0.85;
+          updateBookmarkPeek(peekScale, dx, dy);
+        }
+      }
+    }, { passive: false });
+
+    function handleTouchEnd() {
+      clearTimeout(holdTimer);
+      if (isPeekActive) {
+        closeBookmarkPeek();
+        setTimeout(() => { suppressClick = false; }, 140);
+      }
+      isHolding = false;
+    }
+
+    card.addEventListener('touchend', handleTouchEnd, { passive: true });
+    card.addEventListener('touchcancel', handleTouchEnd, { passive: true });
+
+    // Desktop Mouse Hold-to-Peek
+    let mouseTimer = null;
+    let mouseStartX = 0;
+    let mouseStartY = 0;
+
+    imgWrap.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return;
+      mouseStartX = e.clientX;
+      mouseStartY = e.clientY;
+      mouseTimer = setTimeout(() => {
+        isHolding = true;
+        suppressClick = true;
+        openBookmarkPeek(pageNum, 1.8, 0, 0);
+      }, 220);
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      if (isPeekActive && isHolding) {
+        const dx = (e.clientX - mouseStartX) * 0.8;
+        const dy = (e.clientY - mouseStartY) * 0.8;
+        updateBookmarkPeek(peekScale, dx, dy);
+      }
+    });
+
+    window.addEventListener('mouseup', () => {
+      clearTimeout(mouseTimer);
+      if (isPeekActive && isHolding) {
+        closeBookmarkPeek();
+        setTimeout(() => { suppressClick = false; }, 100);
+      }
+      isHolding = false;
+    });
+
+    // Peek Button Quick Click
+    if (peekBtn) {
+      peekBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openBookmarkPeek(pageNum, 1.8, 0, 0);
+      });
+    }
+
+    // Card Click -> Jump to page (only if not a peek gesture)
+    card.addEventListener('click', (e) => {
+      if (suppressClick) {
+        e.stopPropagation();
+        return;
+      }
+      turnToPage(pageNum);
+      bookmarksModal.classList.remove('open');
+    });
+  }
+
   function renderBookmarksList() {
     bookmarksList.innerHTML = '';
     if (bookmarks.length === 0) {
@@ -691,30 +965,60 @@ document.addEventListener('DOMContentLoaded', () => {
       const card = document.createElement('div');
       card.className = 'm-bookmark-card';
 
+      const imgWrap = document.createElement('div');
+      imgWrap.className = 'm-bookmark-img-wrap';
+
       const img = document.createElement('img');
       img.src = PAGE_IMAGES[pageNum - 1];
       img.alt = `Bookmark ${pageNum}`;
+      img.loading = 'lazy';
+
+      const peekBadge = document.createElement('span');
+      peekBadge.className = 'm-bookmark-peek-badge';
+      peekBadge.innerHTML = `🔍 Peek`;
+
+      imgWrap.appendChild(img);
+      imgWrap.appendChild(peekBadge);
 
       const meta = document.createElement('div');
       meta.className = 'm-bookmark-meta';
-      meta.innerHTML = `<span>Page ${pageNum}</span>`;
+
+      const pageTitle = document.createElement('span');
+      pageTitle.textContent = `Page ${pageNum}`;
+
+      const actions = document.createElement('div');
+      actions.className = 'm-bookmark-actions';
+
+      const peekBtn = document.createElement('button');
+      peekBtn.className = 'm-bookmark-peek-btn';
+      peekBtn.title = 'Quick Peek';
+      peekBtn.innerHTML = `
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <span>Peek</span>
+      `;
 
       const delBtn = document.createElement('button');
       delBtn.className = 'm-bookmark-del';
+      delBtn.title = 'Delete Bookmark';
       delBtn.innerHTML = '✕';
       delBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         toggleBookmark(pageNum);
       });
 
-      meta.appendChild(delBtn);
-      card.appendChild(img);
+      actions.appendChild(peekBtn);
+      actions.appendChild(delBtn);
+
+      meta.appendChild(pageTitle);
+      meta.appendChild(actions);
+
+      card.appendChild(imgWrap);
       card.appendChild(meta);
 
-      card.addEventListener('click', () => {
-        turnToPage(pageNum);
-        bookmarksModal.classList.remove('open');
-      });
+      attachBookmarkGestures(card, imgWrap, pageNum, peekBtn);
 
       bookmarksList.appendChild(card);
     });

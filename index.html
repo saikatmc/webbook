@@ -270,7 +270,7 @@
         <div class="sheet-header">
           <div class="sheet-title-box">
             <h2>Bookmarked Pages</h2>
-            <span class="sheet-subtitle">Quick access to marked pages</span>
+            <span class="sheet-subtitle">Tap to jump • 2-finger pinch or hold to quick-peek</span>
           </div>
           <button class="sheet-close-btn" id="closeBookmarksBtn">✕</button>
         </div>
@@ -281,6 +281,31 @@
           <div class="empty-state" id="emptyBookmarksMsg">
             <p>No pages bookmarked yet.</p>
             <span>Tap the "Bookmark" icon at the bottom dock to pin any page.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bookmark Quick-Peek Zoom Overlay (Hold / Two-Finger Pinch to Zoom & Release to Close) -->
+    <div class="bookmark-peek-overlay" id="bookmarkPeekOverlay" aria-hidden="true">
+      <div class="bookmark-peek-backdrop"></div>
+      <div class="bookmark-peek-box" id="bookmarkPeekBox">
+        <div class="bookmark-peek-header">
+          <div class="bookmark-peek-title" id="bookmarkPeekTitle">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <span id="bookmarkPeekTitleText">Page 1 • Quick Peek</span>
+          </div>
+          <div class="bookmark-peek-hint">
+            <span class="peek-dot"></span>
+            <span id="bookmarkPeekHintText">Release to close • Pinch to zoom</span>
+          </div>
+        </div>
+        <div class="bookmark-peek-viewport" id="bookmarkPeekViewport">
+          <div class="bookmark-peek-img-wrap" id="bookmarkPeekImgWrap">
+            <img id="bookmarkPeekImg" src="" alt="Bookmark Quick Peek" draggable="false" />
           </div>
         </div>
       </div>

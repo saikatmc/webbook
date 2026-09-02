@@ -724,7 +724,13 @@ html, body {
   font-size: 0.58rem;
   font-weight: 800;
   padding: 1px 4px;
-  border-radius: 8px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 14px;
+  height: 14px;
+  box-shadow: 0 0 6px var(--accent-glow);
 }
 
 /* ==========================================================================
@@ -810,55 +816,118 @@ body.immersive-mode .mobile-bottom-dock {
   gap: 8px;
 }
 
-.m-jump-box {
-  display: flex;
+.preload-all-btn {
+  display: inline-flex;
   align-items: center;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid var(--dock-border);
+  gap: 6px;
+  background: rgba(99, 102, 241, 0.16);
+  border: 1px solid rgba(99, 102, 241, 0.4);
+  color: #c7d2fe;
+  padding: 5px 10px;
   border-radius: var(--radius-xs);
-  padding: 2px 4px;
-}
-
-.m-jump-box input {
-  width: 50px;
-  background: transparent;
-  border: none;
-  color: var(--text-main);
-  font-size: 0.78rem;
-  padding: 2px 4px;
-  outline: none;
-}
-
-.m-jump-box button {
-  background: var(--accent);
-  border: none;
-  color: #fff;
   font-size: 0.72rem;
   font-weight: 700;
-  padding: 3px 6px;
-  border-radius: 3px;
   cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  user-select: none;
+  touch-action: manipulation;
+}
+
+.preload-all-btn svg {
+  flex-shrink: 0;
+}
+
+.preload-all-btn:hover,
+.preload-all-btn:active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+  box-shadow: 0 0 10px var(--accent-glow);
+}
+
+.preload-all-btn.loading {
+  background: rgba(234, 179, 8, 0.2);
+  border-color: rgba(234, 179, 8, 0.5);
+  color: #fde047;
+  pointer-events: none;
+}
+
+.preload-all-btn.cached {
+  background: rgba(34, 197, 94, 0.18);
+  border-color: rgba(34, 197, 94, 0.5);
+  color: #86efac;
+}
+
+.preload-all-btn.hidden {
+  display: none !important;
+}
+
+.clear-cache-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  color: #fca5a5;
+  padding: 5px 9px;
+  border-radius: var(--radius-xs);
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  user-select: none;
+  touch-action: manipulation;
+}
+
+.clear-cache-btn svg {
+  flex-shrink: 0;
+}
+
+.clear-cache-btn:hover,
+.clear-cache-btn:active {
+  background: #ef4444;
+  color: #fff;
+  border-color: #ef4444;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.4);
+}
+
+.clear-cache-btn.hidden {
+  display: none !important;
 }
 
 .sheet-close-btn {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: var(--text-sub);
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 1rem;
-  font-weight: 700;
   cursor: pointer;
   touch-action: manipulation;
-  transition: all 0.15s ease;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  flex-shrink: 0;
+  padding: 0;
+}
+
+.sheet-close-btn svg {
+  display: block;
+}
+
+.sheet-close-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+  color: var(--text-main);
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: scale(1.05);
 }
 
 .sheet-close-btn:active {
   background: #ef4444;
+  border-color: #ef4444;
   color: #fff;
   transform: scale(0.92);
 }
@@ -1057,53 +1126,49 @@ body.immersive-mode .mobile-bottom-dock {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 0.72rem;
+  padding: 4px 4px 2px;
+  width: 100%;
+  gap: 6px;
+}
+
+.m-bookmark-title {
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  font-size: 0.78rem;
   font-weight: 700;
-  padding: 2px 2px;
-}
-
-.m-bookmark-actions {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.m-bookmark-peek-btn {
-  background: rgba(99, 102, 241, 0.15);
-  border: 1px solid rgba(99, 102, 241, 0.35);
-  color: #a5b4fc;
-  border-radius: 4px;
-  padding: 2px 5px;
-  font-size: 0.68rem;
-  font-weight: 600;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  transition: all 0.15s ease;
-}
-
-.m-bookmark-peek-btn:hover {
-  background: rgba(99, 102, 241, 0.35);
-  color: #ffffff;
+  letter-spacing: 0.2px;
 }
 
 .m-bookmark-del {
-  background: transparent;
-  border: none;
-  color: #ef4444;
-  font-size: 0.85rem;
-  cursor: pointer;
-  padding: 2px 4px;
-  display: flex;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  color: #fca5a5;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 4px;
-  transition: background 0.15s ease;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+  padding: 0;
+  margin: 0;
 }
 
-.m-bookmark-del:hover {
-  background: rgba(239, 68, 68, 0.15);
+.m-bookmark-del svg {
+  display: block;
+}
+
+.m-bookmark-del:hover,
+.m-bookmark-del:active {
+  background: #ef4444;
+  border-color: #ef4444;
+  color: #ffffff;
+  transform: scale(1.1);
 }
 
 .empty-state {

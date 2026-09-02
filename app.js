@@ -21,7 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const PAGE_IMAGES = PAGE_SEQUENCE_NUMS.map(num => `Pages/Page (${num}).jpeg`);
 
   // DOM Elements
-  const flipbookEl = document.getElementById('flipbook');
+  const bookContainer = document.getElementById('bookContainer');
   const readerStage = document.getElementById('readerStage');
   const currentPageText = document.getElementById('currentPageText');
   const totalPagesText = document.getElementById('totalPagesText');
@@ -132,9 +132,27 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   applyTheme(currentTheme);
 
+  // Helper to ensure flipbook container element exists and is attached to DOM
+  function getOrCreateFlipbookElement() {
+    let el = document.getElementById('flipbook');
+    const container = bookContainer || document.getElementById('bookContainer') || readerStage;
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'flipbook';
+      el.className = 'flipbook';
+      if (container) {
+        container.appendChild(el);
+      }
+    } else if (container && !container.contains(el)) {
+      container.appendChild(el);
+    }
+    return el;
+  }
+
   // Populate Pages - Uniform 'soft' density with async decoding
-  function populateBookPages() {
-    flipbookEl.innerHTML = '';
+  function populateBookPages(targetEl) {
+    const flipbook = targetEl || getOrCreateFlipbookElement();
+    flipbook.innerHTML = '';
     PAGE_IMAGES.forEach((src, idx) => {
       const pageDiv = document.createElement('div');
       pageDiv.className = 'flipbook-page';
@@ -147,7 +165,7 @@ document.addEventListener('DOMContentLoaded', () => {
       img.decoding = 'async';
 
       pageDiv.appendChild(img);
-      flipbookEl.appendChild(pageDiv);
+      flipbook.appendChild(pageDiv);
     });
   }
 
@@ -169,7 +187,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const screenW = window.innerWidth;
     const screenH = window.innerHeight;
 
-    const isImmersive = document.body.classList.contains('immersive-mode');
+    const isImmersive = document.body.classList.contains('immersive-mode') || !!document.fullscreenElement;
     const reservedVertical = isImmersive ? 10 : (isPortrait ? 132 : 54);
     const availableH = Math.max(260, screenH - reservedVertical);
     const availableW = Math.max(240, screenW - 8);
@@ -201,18 +219,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Initialize PageFlip with Reading Memory Persistence
   function initFlipbook(startIdx) {
-    populateBookPages();
+    const flipbook = getOrCreateFlipbookElement();
+    populateBookPages(flipbook);
     const dims = getMobileBookDimensions();
 
-    flipbookEl.style.width = `${dims.width}px`;
-    flipbookEl.style.height = `${dims.height}px`;
+    flipbook.style.width = `${dims.width}px`;
+    flipbook.style.height = `${dims.height}px`;
 
     // Retrieve last saved reading progress
     const savedPage = typeof startIdx === 'number'
       ? startIdx
       : Math.max(0, Math.min(TOTAL_PAGES - 1, parseInt(localStorage.getItem('flipbook_last_page') || '0', 10)));
 
-    pageFlip = new St.PageFlip(flipbookEl, {
+    pageFlip = new St.PageFlip(flipbook, {
       startPage: savedPage,
       width: dims.width,
       height: dims.height,
@@ -231,7 +250,7 @@ document.addEventListener('DOMContentLoaded', () => {
       drawShadow: true
     });
 
-    const pageElements = flipbookEl.querySelectorAll('.flipbook-page');
+    const pageElements = flipbook.querySelectorAll('.flipbook-page');
     pageFlip.loadFromHTML(pageElements);
 
     pageFlip.on('flip', (e) => {
@@ -511,6 +530,10 @@ document.addEventListener('DOMContentLoaded', () => {
       minIcon.classList.add('hidden');
       fullscreenBtn.classList.remove('active');
     }
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      handleMobileResize(true);
+    }, 100);
   });
 
   // Theme Sheet
@@ -923,30 +946,43 @@ document.addEventListener('DOMContentLoaded', () => {
   let lastW = window.innerWidth;
   let lastH = window.innerHeight;
 
-  function handleMobileResize() {
-    if (!pageFlip) return;
+  function handleMobileResize(force = false) {
     const currentW = window.innerWidth;
     const currentH = window.innerHeight;
 
-    // Trigger update if screen dimensions changed significantly (e.g. rotation, resizing)
-    if (Math.abs(currentW - lastW) > 6 || Math.abs(currentH - lastH) > 6) {
+    // Trigger update if screen dimensions changed significantly or forced (e.g. fullscreen toggle, rotation, resizing)
+    if (force || Math.abs(currentW - lastW) > 4 || Math.abs(currentH - lastH) > 4) {
       lastW = currentW;
       lastH = currentH;
-      const currentIdx = pageFlip.getCurrentPageIndex();
-      try {
-        pageFlip.destroy();
-      } catch (e) { }
+      let currentIdx = 0;
+      if (pageFlip) {
+        try {
+          currentIdx = pageFlip.getCurrentPageIndex();
+        } catch (e) {
+          currentIdx = parseInt(localStorage.getItem('flipbook_last_page') || '0', 10);
+        }
+        try {
+          pageFlip.destroy();
+        } catch (e) { }
+        pageFlip = null;
+      } else {
+        currentIdx = parseInt(localStorage.getItem('flipbook_last_page') || '0', 10);
+      }
       initFlipbook(currentIdx);
     }
   }
 
   window.addEventListener('resize', () => {
     clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(handleMobileResize, 120);
+    resizeTimer = setTimeout(() => {
+      handleMobileResize(false);
+    }, 120);
   });
 
   window.addEventListener('orientationchange', () => {
-    setTimeout(handleMobileResize, 200);
+    setTimeout(() => {
+      handleMobileResize(true);
+    }, 200);
   });
 
   // Keyboard Shortcuts
